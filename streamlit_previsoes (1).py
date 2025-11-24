@@ -18,17 +18,37 @@ def _download(df, label, filename):
     )
 
 # =====================================================
-# CONFIG BÁSICO
+# CONFIG BÁSICO — VERSÃO CORRIGIDA
 # =====================================================
-st.set_page_config(page_title="PIB per capita — Bayes (Gamma) & EDA", layout="wide")
-BASE_DIR = Path("/content/drive/MyDrive/PIB_Forecast")
+st.set_page_config(
+    page_title="PIB per capita — Bayes (Gamma) & EDA",
+    layout="wide"
+)
+
+# Caminho universal: funciona no Streamlit Cloud, local e GitHub
+BASE_DIR = Path(__file__).resolve().parent
+
 PLOTLY_TEMPLATE = "plotly_white"
 
-NGROK_URL = os.getenv("NGROK_URL", "")
-if NGROK_URL:
-    st.success(f"🔗 Link externo do app (ngrok): **{NGROK_URL}**")
+# Detecta automaticamente se está no Colab
+# (Colab define a variável de ambiente 'COLAB_GPU' ou 'COLAB_RELEASE_TAG')
+RUNNING_IN_COLAB = (
+    "COLAB_GPU" in os.environ
+    or "COLAB_RELEASE_TAG" in os.environ
+    or "/content" in str(Path.cwd())
+)
+
+if RUNNING_IN_COLAB:
+    # só mostra NGROK quando estiver no Colab
+    NGROK_URL = os.getenv("NGROK_URL", "")
+    if NGROK_URL:
+        st.success(f"🔗 Link externo do app (ngrok): **{NGROK_URL}**")
+    else:
+        st.info("🔌 Rode a célula no Colab que inicia o túnel do ngrok para ter o link externo.")
 else:
-    st.info("🔌 Rode a célula no Colab que inicia o túnel do ngrok para ter o link externo.")
+    # quando fora do Colab (ex: Streamlit Cloud), isso evita mensagens inúteis
+    st.info("Aplicação rodando fora do Colab — ngrok desabilitado.")
+
 
 # =====================================================
 # CSS
@@ -97,12 +117,32 @@ def load_regression_data():
       - metrics_bayes_PIBpc_summary.csv
     """
 
+    def load_csv(pattern, required=True, index_col=None):
+        """
+        Procura automaticamente por um arquivo que começa com `pattern`
+        dentro do BASE_DIR. Evita erro quando existe (1), (2), etc.
+        """
+        files = os.listdir(BASE_DIR)
+        matches = [f for f in files if f.startswith(pattern) and f.endswith(".csv")]
+    
+        if not matches:
+            if required:
+                st.error(f"❌ Arquivo não encontrado: {pattern}*.csv\nArquivos no diretório: {files}")
+                st.stop()
+            else:
+                return None
+    
+        filepath = BASE_DIR / matches[0]
+        return pd.read_csv(filepath, index_col=index_col)
+    
+    
     # =====================================================
-    # 1) CARREGAR ARQUIVOS RAW
+    # 1) CARREGAR ARQUIVOS RAW (VERSÃO CORRIGIDA)
     # =====================================================
-    df_reg_raw = pd.read_csv(BASE_DIR / "base_regressao_PIBpc_composicao.csv")
-    df_mun_raw = pd.read_csv(BASE_DIR / "efeitos_municipais_PIBpc_BAYES.csv")
-    summary    = pd.read_csv(BASE_DIR / "metrics_bayes_PIBpc_summary.csv", index_col=0)
+    df_reg_raw = load_csv("base_regressao_PIBpc_composicao")
+    df_mun_raw = load_csv("efeitos_municipais_PIBpc_BAYES")
+    summary    = load_csv("metrics_bayes_PIBpc_summary", index_col=0)
+
 
     # =====================================================
     # 2) SANITIZAÇÃO PROFUNDA
